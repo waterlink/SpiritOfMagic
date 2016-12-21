@@ -34,12 +34,20 @@
     padding: 1em;
 }
 
+#stats dl {
+    float: left;
+}
+
+#stats dl + dl {
+    margin-left: 3em;
+}
+
 #stats dl dt {
     float: left;
 }
 
 #stats dl dd {
-    margin-left: 5em;
+    margin-left: 4em;
 }
 
 .hide {

@@ -12,6 +12,14 @@
     <strong>HP: </strong>
     <span class="status_bar__health_indicator"></span>
 
+    |
+    <strong>LVL: </strong>
+    <span class="status_bar__level"></span>
+
+    |
+    <strong>XP: </strong>
+    <span class="status_bar__experience"></span>
+
     <span class="status_bar__target hide">
         |
         <strong>Target: </strong>
@@ -25,15 +33,26 @@
 <div id="stats" class="hide">
     <strong>Stats</strong>
 
-    <dl>
-        <dt>HP</dt><dd class="stats__hp"></dd>
-        <dt>DMG</dt><dd class="stats__dmg"></dd>
-        <dt>HIT</dt><dd class="stats__hit"></dd>
-        <dt>CRIT</dt><dd class="stats__crit"></dd>
-        <dt>ASPD</dt><dd class="stats__aspd"></dd>
-        <dt>DEF</dt><dd class="stats__def"></dd>
-        <dt>EVA</dt><dd class="stats__eva"></dd>
-    </dl>
+    <div>
+        <dl>
+            <dt>STR <a href="#" onclick="strPlus()">+</a></dt><dd class="stats__str">0</dd>
+            <dt>AGI <a href="#" onclick="agiPlus()">+</a></dt><dd class="stats__agi">0</dd>
+            <dt>VIT <a href="#" onclick="vitPlus()">+</a></dt><dd class="stats__vit">0</dd>
+            <dt>DEX <a href="#" onclick="dexPlus()">+</a></dt><dd class="stats__dex">0</dd>
+            <dt>Free</dt><dd class="stats__free">0</dd>
+        </dl>
+
+        <dl>
+            <dt>HP</dt><dd class="stats__hp"></dd>
+            <dt>HREG</dt><dd class="stats__hreg"></dd>
+            <dt>DEF</dt><dd class="stats__def"></dd>
+            <dt>EVA</dt><dd class="stats__eva"></dd>
+            <dt>DMG</dt><dd class="stats__dmg"></dd>
+            <dt>HIT</dt><dd class="stats__hit"></dd>
+            <dt>CRIT</dt><dd class="stats__crit"></dd>
+            <dt>ASPD</dt><dd class="stats__aspd"></dd>
+        </dl>
+    </div>
 </div>
 
 <div id="log">

@@ -1,10 +1,10 @@
 var componentStorage = {};
 
-function get(name) {
+const get = function (name) {
     if (!componentStorage[name])
         componentStorage[name] = [];
     return componentStorage[name];
-}
+};
 
 const addComponent = function (name, component) {
     get(name).push(component);
@@ -23,6 +23,8 @@ const addEntity = function (entity) {
             addComponent(name, component);
         }
     }
+
+    return entity.index;
 };
 
 const each = function (name, action) {
@@ -134,13 +136,22 @@ const subElement = function (el, name) {
 
 const renderStats = function () {
     each("player", function (player) {
-        subElement(stats, "hp").textContent = player.health.points + "/" + player.health.total;
-        subElement(stats, "dmg").textContent = player.attack.damage;
+        subElement(stats, "str").textContent = player.stats.strength;
+        subElement(stats, "agi").textContent = player.stats.agility;
+        subElement(stats, "vit").textContent = player.stats.vitality;
+        subElement(stats, "dex").textContent = player.stats.dexterity;
+        subElement(stats, "free").textContent = player.stats.freePoints;
+
+        subElement(stats, "hp").textContent =
+            player.health.points +"/" + player.health.total;
+        subElement(stats, "hreg").textContent = player.healthRegen.delay;
+        subElement(stats, "dmg").textContent =
+            player.attack.damage + "d" + player.attack.dice + "+" + player.attack.bonus;
         subElement(stats, "hit").textContent = player.attack.accuracy;
         subElement(stats, "crit").textContent = player.attack.critical;
         subElement(stats, "aspd").textContent = player.attack.delay;
         subElement(stats, "def").textContent = player.defense.reduction;
-        subElement(stats, "eva").textContent = player.defense.evasion ;
+        subElement(stats, "eva").textContent = player.defense.evasion;
     });
 };
 
@@ -157,7 +168,7 @@ const toggleStats = function () {
 const statusBar = document.getElementById("status_bar");
 const healthBarSize = 10;
 
-function healthIndicator(health) {
+const healthIndicator = function (health) {
     var i;
     var representation = "";
     var fillLevel = Math.floor(health.points / health.total * healthBarSize);
@@ -168,20 +179,24 @@ function healthIndicator(health) {
     if (health.points <= 0) representation += " (RIP)";
 
     return representation;
-}
+};
 
-const renderHealthBar = function () {
+const renderStatusBar = function () {
     each("player", function (player) {
         subElement(statusBar, "health_indicator").textContent = healthIndicator(player.health);
+        subElement(statusBar, "level").textContent = player.experience.level;
+        subElement(statusBar, "experience").textContent = player.experience.points + "/" + player.experience.total;
     });
 };
 
 const regenHealth = function () {
     each("healthRegen", function (actor) {
-        actor.healthRegen.delayLeft -= timePassedMs;
+        var delayMultiplier = actor.battle.inBattle ? 1 : 5;
+        actor.healthRegen.delayLeft -= timePassedMs * delayMultiplier;
 
         if (actor.healthRegen.delayLeft <= 0 && !actor.death.dead) {
-            affectHealth(actor.health, +1);
+            var regenAmount = actor.battle.inBattle ? 1 : 3;
+            affectHealth(actor.health, +regenAmount);
             actor.healthRegen.delayLeft = actor.healthRegen.delay;
         }
     });
@@ -248,15 +263,37 @@ const affectHealth = function (health, change) {
     health.points = Math.max(0, Math.min(health.total, health.points + change));
 };
 
+const rollHitDice = function (attack, targetDefense) {
+    var roll = Math.random() * (100 + targetDefense.evasion);
+    return roll <= attack.accuracy;
+};
+
+const rollDamageDice = function (attack) {
+    var roll = Math.random() * (attack.dice - 1) + 1;
+    return Math.floor(roll * attack.damage) + attack.bonus;
+};
+
+const reducedByDefense = function (damage, defense) {
+    return Math.max(0, damage - defense.reduction);
+};
+
 const autoAttack = function () {
     each("battle", function (actor) {
         if (actor.battle.inBattle) {
             var target = entities[actor.battle.target];
             if (target && actor.attack.delayLeft <= 0) {
                 actor.attack.delayLeft = actor.attack.delay;
-                addLog(actor.name + " inflicts " + actor.attack.damage + " points of damage to " + target.name);
-                affectHealth(target.health, -actor.attack.damage);
-                target.battle.lastAttacker = actor.index;
+
+                if (rollHitDice(actor.attack, target.defense)) {
+                    var damage = reducedByDefense(rollDamageDice(actor.attack), target.defense);
+
+                    addLog(actor.name + " inflicts " + damage + " points of damage to " + target.name);
+                    affectHealth(target.health, -damage);
+
+                    target.battle.lastDamageInflicter = actor.index;
+                } else {
+                    addLog(actor.name + " misses " + target.name);
+                }
             }
         }
     });
@@ -274,8 +311,8 @@ const death = function () {
                 sprite: {text: "~"},
             });
 
-            var lastAttacker = entities[actor.battle.lastAttacker];
-            addLog(actor.name + " is killed by " + lastAttacker.name);
+            var lastDamageInflicter = entities[actor.battle.lastDamageInflicter];
+            addLog(actor.name + " is killed by " + lastDamageInflicter.name);
         }
     });
 };
@@ -303,8 +340,85 @@ const addLog = function (message) {
     });
 };
 
+const calculateStats = function () {
+    each("stats", function (actor) {
+        actor.health.total = 10 + actor.stats.vitality * 10;
+        actor.healthRegen.delay = 10000 - actor.stats.vitality * 30;
+        actor.defense.reduction = actor.stats.vitality;
+        actor.defense.evasion = actor.stats.agility + actor.stats.dexterity * 2;
+        actor.attack.bonus = 1 + actor.stats.strength;
+        actor.attack.accuracy = 20 + actor.stats.agility + actor.stats.dexterity * 3;
+        actor.attack.critical = actor.stats.agility * 3 + actor.stats.dexterity;
+        actor.attack.delay = 1000 - actor.stats.agility * 10;
+    });
+};
+
+const increaseStat = function (stat) {
+    each("player", function (player) {
+        if (player.stats.freePoints > 0) {
+            player.stats[stat]++;
+            player.stats.freePoints--;
+        }
+    });
+};
+
+const calculateWeaponStats = function () {
+    each("wielding", function (actor) {
+        var weapon = entities[actor.wielding.weapon];
+        actor.attack.damage = weapon.weapon.damage;
+        actor.attack.dice = weapon.weapon.dice;
+        actor.attack.bonus += weapon.weapon.bonus;
+    });
+};
+
+const rewards = function () {
+    each("rewards", function (actor) {
+        if (actor.death.dead && !actor.rewards.rewarded) {
+            var lastDamageInflicter = entities[actor.battle.lastDamageInflicter];
+            if (lastDamageInflicter.experience)
+                lastDamageInflicter.experience.points += actor.rewards.experience;
+            actor.rewards.rewarded = true;
+        }
+    });
+};
+
+const leveling = function () {
+    each("experience", function (actor) {
+        var experience = actor.experience;
+        if (experience.points >= experience.total) {
+            experience.points -= experience.total;
+            experience.level++;
+            experience.total = Math.floor(experience.growth * experience.total);
+            actor.stats.freePoints += experience.gainedStatPoints;
+        }
+    });
+};
+
 clearLogs();
 initField();
+
+function createGoblin(position) {
+    addEntity({
+        enemy: {},
+        name: "Goblin",
+        position: position,
+        sprite: {text: "g"},
+        stats: {strength: 1, agility: 1, vitality: 1, dexterity: 1, freePoints: 0},
+        health: {points: 50, total: 50},
+        healthRegen: {delay: 5000, delayLeft: 5000},
+        attack: {damage: 2, dice: 4, bonus: 0, accuracy: 90, critical: 5, delay: 3000, delayLeft: 0},
+        defense: {reduction: 0, evasion: 10},
+        battle: {inBattle: false},
+        death: {dead: false},
+        wielding: {
+            weapon: addEntity({
+                weapon: {damage: 1, dice: 2, bonus: 0},
+                name: "Dagger",
+            }),
+        },
+        rewards: {experience: 100, rewarded: false},
+    });
+}
 
 const newGame = function () {
     console.log("There is no saved game. Creating new one");
@@ -324,38 +438,53 @@ const newGame = function () {
         position: {x: 10, y: 5},
         willMove: {dx: 0, dy: 0},
         sprite: {text: "@"},
-        health: {points: 30, total: 50},
+        stats: {strength: 1, agility: 1, vitality: 1, dexterity: 1, freePoints: 3},
+        health: {points: 10, total: 50},
         healthRegen: {delay: 2000, delayLeft: 2000},
-        attack: {damage: 20, accuracy: 70, critical: 5, delay: 1000, delayLeft: 0},
+        attack: {damage: 3, dice: 4, bonus: 0, accuracy: 70, critical: 5, delay: 1000, delayLeft: 0},
         defense: {reduction: 5, evasion: 20},
         battle: {inBattle: false},
         death: {dead: false},
+        wielding: {
+            weapon: addEntity({
+                weapon: {damage: 1, dice: 2, bonus: 0},
+                name: "Dagger",
+            }),
+        },
+        rewards: {experience: 0, rewarded: false},
+        experience: {level: 1, points: 0, total: 100, growth: 1.1, gainedStatPoints: 1},
     });
 
-    addEntity({
-        enemy: {},
-        name: "Goblin",
-        position: {x: 5, y: 10},
-        sprite: {text: "g"},
-        health: {points: 50, total: 50},
-        healthRegen: {delay: 5000, delayLeft: 5000},
-        attack: {damage: 10, accuracy: 90, critical: 5, delay: 3000, delayLeft: 0},
-        defense: {reduction: 0, evasion: 10},
-        battle: {inBattle: false},
-        death: {dead: false},
-    });
+    createGoblin({x: 5, y: 10});
+    createGoblin({x: 7, y: 9});
+    createGoblin({x: 9, y: 8});
+    createGoblin({x: 11, y: 10});
+    createGoblin({x: 5, y: 11});
+    createGoblin({x: 8, y: 11});
+    createGoblin({x: 11, y: 11});
+    createGoblin({x: 6, y: 13});
+    createGoblin({x: 8, y: 12});
+    createGoblin({x: 10, y: 14});
 
     addEntity({
         enemy: {},
         name: "Ghoul",
         position: {x: 15, y: 15},
         sprite: {text: "G"},
+        stats: {strength: 10, agility: 5, vitality: 20, dexterity: 5, freePoints: 0},
         health: {points: 300, total: 300},
         healthRegen: {delay: 5000, delayLeft: 500},
-        attack: {damage: 15, accuracy: 90, critical: 5, delay: 1000, delayLeft: 0},
+        attack: {damage: 5, dice: 3, bonus: 2, accuracy: 90, critical: 5, delay: 1000, delayLeft: 0},
         defense: {reduction: 5, evasion: 10},
         battle: {inBattle: false},
         death: {dead: false},
+        wielding: {
+            weapon: addEntity({
+                weapon: {damage: 5, dice: 3, bonus: 5},
+                name: "Ghoul's Claw",
+            }),
+        },
+        rewards: {experience: 5000, rewarded: false},
     });
 };
 
@@ -393,18 +522,22 @@ setInterval(function () {
 
     renderSprites();
     renderStats();
-    renderHealthBar();
+    renderStatusBar();
     renderPlayerSprite();
     renderBattleIndicator();
     renderBattleTargetStats();
     renderLogs();
 
+    calculateStats();
+    calculateWeaponStats();
     movement();
     regenHealth();
     battleStatus();
     attackDelay();
     autoAttack();
     death();
+    rewards();
+    leveling();
 
     saveToLocalStorage();
 
@@ -425,4 +558,20 @@ document.body.onkeydown = function (event) {
     [].forEach(function (fn) {
         fn(event.keyCode)
     });
+};
+
+const strPlus = function () {
+    increaseStat("strength");
+};
+
+const agiPlus = function () {
+    increaseStat("agility");
+};
+
+const vitPlus = function () {
+    increaseStat("vitality");
+};
+
+const dexPlus = function () {
+    increaseStat("dexterity");
 };

@@ -33,16 +33,24 @@ const addEntity = function (entity) {
     return entity.index;
 };
 
+function removeComponentFromEntity(entity, name) {
+    if (entity.hasOwnProperty(name)) {
+        var component = entity[name];
+        var componentList = get(name);
+        componentList[component.componentIndex] = null;
+        delete entity[name];
+    }
+}
+
 const removeEntity = function (entity) {
+    var index = entity.index;
+
     for (var name in entity) {
-        if (entity.hasOwnProperty(name)) {
-            var component = entity[name];
-            var componentList = get(name);
-            componentList[component.componentIndex] = null;
-        }
+        //noinspection JSUnfilteredForInLoop
+        removeComponentFromEntity(entity, name);
     }
 
-    entities[entity.index] = null;
+    entities[index] = null;
 };
 
 const each = function (name, action) {
@@ -102,7 +110,7 @@ const renderSprites = function () {
 
     each("player", function (player) {
         each("sprite", function (sprite) {
-            if (sprite.sprite.text) {
+            if (sprite.sprite.text && sprite.position) {
                 renderSpriteAtOrigin(
                     sprite.position.x - player.position.x,
                     sprite.position.y - player.position.y,
@@ -340,10 +348,40 @@ const death = function () {
 };
 
 const corpseDecay = function () {
-    each("corpse", function (actor) {
-        actor.corpse.decayIn -= timePassedMs;
-        if (actor.corpse.decayIn <= 0) {
+    generalDecay("corpse");
+};
+
+const droppedLootDecay = function () {
+    generalDecay("droppedLoot");
+};
+
+const generalDecay = function (name) {
+    each(name, function (actor) {
+        actor[name].decayIn -= timePassedMs;
+        if (actor[name].decayIn <= 0) {
             removeEntity(actor);
+        }
+    });
+};
+
+const lootDice = function (possibility) {
+    return Math.random() < possibility.probability;
+};
+
+const dropLoot = function () {
+    each("loot", function (actor) {
+        if (actor.death.dead && !actor.loot.dropped) {
+            actor.loot.items.forEach(function (possibility) {
+                if (lootDice(possibility) && !actor.loot.dropped) {
+                    var item = deepCloneEntityPrototype(possibility.item);
+                    item.position = {x: actor.position.x, y: actor.position.y};
+                    item.droppedLoot = {decayIn: 30000};
+                    addEntity(item);
+                    actor.loot.dropped = true;
+                    addLog("Item " + item.name + " has been dropped - wear/wield with 'W'")
+                }
+            });
+            actor.loot.dropped = true;
         }
     });
 };
@@ -415,6 +453,16 @@ const weaponStats = function () {
     });
 };
 
+const shieldStats = function () {
+    each("wearing", function (actor) {
+        if (actor.wearing.shield) {
+            var shield = entities[actor.wearing.shield];
+            actor.defense.reduction += shield.shield.reduction;
+            actor.defense.evasion += shield.shield.evasion;
+        }
+    });
+};
+
 const rewards = function () {
     each("rewards", function (actor) {
         if (actor.death.dead && !actor.rewards.rewarded) {
@@ -474,7 +522,7 @@ const spawnDice = function (spawnZone) {
     return Math.random() < spawnZone.probability;
 };
 
-const deepCloneSpawnPrototype = function (prototype) {
+const deepCloneEntityPrototype = function (prototype) {
     return JSON.parse(JSON.stringify(prototype));
 };
 
@@ -503,7 +551,7 @@ const spawnZones = function () {
 
                 if (!getByPosition(x, y) && thingsInZone < spawnZone.max) {
                     if (spawnDice(spawnZone)) {
-                        var prototype = deepCloneSpawnPrototype(spawnZone.prototype);
+                        var prototype = deepCloneEntityPrototype(spawnZone.prototype);
                         addEntity(Object.assign({}, prototype, {position: {x: x, y: y}}));
                         thingsInZone++;
                     }
@@ -548,10 +596,34 @@ const goblinPrototype = function() {
         wielding: {
             weapon: addEntity({
                 weapon: {damage: 1, dice: 2, bonus: 0},
-                name: "Dagger",
+                name: "Dagger 1d2",
             }),
         },
+        wearing: {
+            shield: null,
+        },
         rewards: {experience: 100, rewarded: false},
+        loot: {
+            items: [
+                {
+                    probability: 0.07,
+                    item: {
+                        weapon: {damage: 2, dice: 4, bonus: 2},
+                        name: "Stolen Short Sword 2d4 + 2",
+                        sprite: {text: "|"},
+                    },
+                },
+                {
+                    probability: 0.05,
+                    item: {
+                        shield: {reduction: 5, evasion: 3},
+                        name: "Small Shield",
+                        sprite: {text: "()"},
+                    },
+                }
+            ],
+            dropped: false,
+        },
     };
 };
 
@@ -604,6 +676,9 @@ const newGame = function () {
                 name: "Dagger",
             }),
         },
+        wearing: {
+            shield: null,
+        },
         rewards: {experience: 0, rewarded: false},
         experience: {level: 1, points: 0, total: 100, growth: 1.1, gainedStatPoints: 1},
     });
@@ -635,6 +710,12 @@ const newGame = function () {
             weapon: addEntity({
                 weapon: {damage: 5, dice: 3, bonus: 5},
                 name: "Ghoul's Claw",
+            }),
+        },
+        wearing: {
+            shield: addEntity({
+                shield: {reduction: 1, evasion: 2},
+                name: "Broken Arm Shield",
             }),
         },
         rewards: {experience: 5000, rewarded: false},
@@ -712,6 +793,34 @@ const startGame = function () {
     loadGameOr(newGame);
 };
 
+const wieldKeyUp = function (key) {
+    if (key === "W".charCodeAt(0)) {
+        each("player", function (actor) {
+            var item = getByPosition(actor.position.x, actor.position.y);
+            if (item && item.weapon) {
+                actor.wielding.weapon = item.index;
+                removeComponentFromEntity(item, "position");
+                removeComponentFromEntity(item, "droppedLoot");
+                addLog(actor.name + " wielding " + item.name);
+            }
+        });
+    }
+};
+
+const wearKeyUp = function (key) {
+    if (key === "W".charCodeAt(0)) {
+        each("player", function (actor) {
+            var item = getByPosition(actor.position.x, actor.position.y);
+            if (item && item.shield) {
+                actor.wearing.shield = item.index;
+                removeComponentFromEntity(item, "position");
+                removeComponentFromEntity(item, "droppedLoot");
+                addLog(actor.name + " wearing " + item.name);
+            }
+        });
+    }
+};
+
 startGame();
 
 var timePassedMs = 0;
@@ -734,6 +843,7 @@ setInterval(function () {
     coreStats();
     levelStats();
     weaponStats();
+    shieldStats();
     obstacles();
     movement();
     regenHealth();
@@ -741,7 +851,9 @@ setInterval(function () {
     attackDelay();
     autoAttack();
     death();
+    dropLoot();
     corpseDecay();
+    droppedLootDecay();
     rewards();
     leveling();
     spawnZones();
@@ -756,6 +868,8 @@ document.body.onkeyup = function (event) {
         movementKeyUp,
         statsKeyUp,
         newGameKeyUp,
+        wieldKeyUp,
+        wearKeyUp,
     ].forEach(function (fn) {
         fn(event.keyCode)
     });

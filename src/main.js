@@ -217,7 +217,7 @@ const regenHealth = function () {
         actor.healthRegen.delayLeft -= timePassedMs * delayMultiplier;
 
         if (actor.healthRegen.delayLeft <= 0 && !actor.death.dead) {
-            var regenAmount = actor.battle.inBattle ? 1 : 3;
+            var regenAmount = actor.battle.inBattle ? 1 : 10;
             affectHealth(actor.health, +regenAmount);
             actor.healthRegen.delayLeft = actor.healthRegen.delay;
         }
@@ -503,13 +503,29 @@ const spawnZones = function () {
 
                 if (!getByPosition(x, y) && thingsInZone < spawnZone.max) {
                     if (spawnDice(spawnZone)) {
-                        var prototype = deepCloneSpawnPrototype(spawnZone.prototype)
+                        var prototype = deepCloneSpawnPrototype(spawnZone.prototype);
                         addEntity(Object.assign({}, prototype, {position: {x: x, y: y}}));
                         thingsInZone++;
                     }
                 }
             }
         }
+    });
+};
+
+const resetStats = function () {
+    each("player", function (player) {
+        player.stats.freePoints =
+            player.stats.strength +
+            player.stats.agility +
+            player.stats.vitality +
+            player.stats.dexterity +
+            player.stats.freePoints;
+
+        player.stats.strength = 0;
+        player.stats.agility = 0;
+        player.stats.vitality = 0;
+        player.stats.dexterity = 0;
     });
 };
 

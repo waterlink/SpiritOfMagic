@@ -557,7 +557,7 @@ const spawnZones = function () {
         var spawnZone = zone.spawnZone;
 
         for (i = 0; i < spawnZone.width; i++) {
-            for (j = 0; j < spawnZone.width; j++) {
+            for (j = 0; j < spawnZone.height; j++) {
                 x = i + spawnZone.x;
                 y = j + spawnZone.y;
 
@@ -568,7 +568,7 @@ const spawnZones = function () {
         }
 
         for (i = 0; i < spawnZone.width; i++) {
-            for (j = 0; j < spawnZone.width; j++) {
+            for (j = 0; j < spawnZone.height; j++) {
                 x = i + spawnZone.x;
                 y = j + spawnZone.y;
 
@@ -650,6 +650,48 @@ const goblinPrototype = function() {
     };
 };
 
+const goblinShamanPrototype = function() {
+    return {
+        enemy: {},
+        name: "Goblin Shaman",
+        position: {},
+        sprite: {text: "\\g"},
+        stats: {strength: 5, agility: 5, vitality: 5, dexterity: 5, freePoints: 0},
+        health: {points: 50, total: 50},
+        healthRegen: {delay: 5000, delayLeft: 5000},
+        attack: {damage: 2, dice: 4, bonus: 0, accuracy: 90, critical: 5, delay: 3000, delayLeft: 0},
+        defense: {reduction: 0, evasion: 10},
+        battle: {inBattle: false},
+        death: {dead: false},
+        wielding: {
+            weapon: addEntity({
+                weapon: {damage: 3, dice: 4, bonus: 0},
+                name: "Shaman Claw",
+            }),
+        },
+        wearing: {
+            shield: addEntity({
+                shield: {reduction: 3, evasion: 3},
+                name: "Arm Shield",
+            }),
+        },
+        rewards: {experience: 2000, rewarded: false},
+        loot: {
+            items: [
+                {
+                    probability: 0.03,
+                    item: {
+                        shield: {reduction: 7, evasion: 7},
+                        name: "Arm Spike Shield + 4",
+                        sprite: {text: "<("},
+                    },
+                }
+            ],
+            dropped: false,
+        },
+    };
+};
+
 //noinspection JSUnusedGlobalSymbols
 const corpseDummyPrototype = {
     corpse: {decayIn: 0},
@@ -666,6 +708,17 @@ const createStoneWall = function (position) {
         position: position,
         sprite: {text: "#"},
     });
+};
+
+const designRoom = function (x, y, fn, rows) {
+    for (var j = 0; j < rows.length; j++) {
+        var row = rows[j];
+        for (var i = 0; i < row.length; i++) {
+            if (row[i] === "#") {
+                fn({x: x + i, y: y + j});
+            }
+        }
+    }
 };
 
 const newGame = function () {
@@ -720,7 +773,7 @@ const newGame = function () {
     addEntity({
         enemy: {},
         name: "Ghoul",
-        position: {x: 15, y: 15},
+        position: {x: 23, y: 15},
         sprite: {text: "G"},
         stats: {strength: 10, agility: 5, vitality: 20, dexterity: 5, freePoints: 0},
         health: {points: 300, total: 300},
@@ -744,41 +797,17 @@ const newGame = function () {
         rewards: {experience: 5000, rewarded: false},
     });
 
-    createStoneWall({x: 4, y: 7});
-    createStoneWall({x: 5, y: 7});
-    createStoneWall({x: 6, y: 7});
-    createStoneWall({x: 7, y: 7});
-
-    createStoneWall({x: 9, y: 7});
-    createStoneWall({x: 10, y: 7});
-    createStoneWall({x: 11, y: 7});
-    createStoneWall({x: 12, y: 7});
-
-    createStoneWall({x: 4, y: 8});
-    createStoneWall({x: 4, y: 9});
-    createStoneWall({x: 4, y: 10});
-    createStoneWall({x: 4, y: 11});
-    createStoneWall({x: 4, y: 12});
-    createStoneWall({x: 4, y: 13});
-    createStoneWall({x: 4, y: 14});
-    createStoneWall({x: 4, y: 15});
-
-    createStoneWall({x: 12, y: 8});
-    createStoneWall({x: 12, y: 9});
-    createStoneWall({x: 12, y: 10});
-    createStoneWall({x: 12, y: 11});
-    createStoneWall({x: 12, y: 12});
-    createStoneWall({x: 12, y: 13});
-    createStoneWall({x: 12, y: 14});
-    createStoneWall({x: 12, y: 15});
-
-    createStoneWall({x: 5, y: 15});
-    createStoneWall({x: 6, y: 15});
-    createStoneWall({x: 7, y: 15});
-    createStoneWall({x: 8, y: 15});
-    createStoneWall({x: 9, y: 15});
-    createStoneWall({x: 10, y: 15});
-    createStoneWall({x: 11, y: 15});
+    designRoom(4, 7, createStoneWall, [
+        "####.####",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "####.####",
+    ]);
 
     addEntity({
         spawnZone: {
@@ -789,6 +818,40 @@ const newGame = function () {
             prototype: goblinPrototype(),
             probability: 0.0001,
             max: 10,
+        },
+    });
+
+    designRoom(4, 16, createStoneWall, [
+        "#.......#######......",
+        "#.............#...#.#",
+        "#.............#...#.#",
+        "#.............#####.#",
+        "#...................#",
+        "#.............#######",
+        "###############",
+    ]);
+
+    addEntity({
+        spawnZone: {
+            x: 5,
+            y: 18,
+            width: 13,
+            height: 5,
+            prototype: goblinPrototype(),
+            probability: 0.0001,
+            max: 20,
+        },
+    });
+
+    addEntity({
+        spawnZone: {
+            x: 5,
+            y: 18,
+            width: 13,
+            height: 5,
+            prototype: goblinShamanPrototype(),
+            probability: 0.0001,
+            max: 25,
         },
     });
 };

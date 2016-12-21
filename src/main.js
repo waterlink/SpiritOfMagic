@@ -13,11 +13,11 @@ const addComponent = function (name, component) {
 
 var entities = [];
 
-function addComponentToEntity(entity, name, component) {
+const addComponentToEntity = function (entity, name, component) {
     entity[name] = component;
     component.entityIndex = entity.index;
     addComponent(name, component);
-}
+};
 
 const addEntity = function (entity) {
     entities.push(entity);
@@ -333,12 +333,6 @@ const death = function () {
 
             addComponentToEntity(actor, "corpse", {decayIn: 10000});
 
-            // addEntity({
-            //     corpse: {decayIn: 10000},
-            //     position: {x: actor.position.x, y: actor.position.y},
-            //     sprite: {text: "~"},
-            // });
-
             var lastDamageInflicter = entities[actor.battle.lastDamageInflicter];
             addLog(actor.name + " is killed by " + lastDamageInflicter.name);
         }
@@ -346,10 +340,10 @@ const death = function () {
 };
 
 const corpseDecay = function () {
-    each("corpse", function (corpse) {
-        corpse.corpse.decayIn -= timePassedMs;
-        if (corpse.corpse.decayIn <= 0) {
-            removeEntity(corpse);
+    each("corpse", function (actor) {
+        actor.corpse.decayIn -= timePassedMs;
+        if (actor.corpse.decayIn <= 0) {
+            removeEntity(actor);
         }
     });
 };
@@ -382,10 +376,10 @@ const coreStats = function () {
         actor.health.total = 10 + actor.stats.vitality * 10;
         actor.healthRegen.delay = 10000 - actor.stats.vitality * 30;
         actor.defense.reduction = actor.stats.vitality;
-        actor.defense.evasion = 5 + actor.stats.agility + actor.stats.dexterity;
+        actor.defense.evasion = 5 + actor.stats.agility * 2 + actor.stats.dexterity;
         actor.attack.bonus = 1 + actor.stats.strength;
         actor.attack.accuracy = 40 + actor.stats.agility + actor.stats.dexterity * 3;
-        actor.attack.critical = 5 + actor.stats.agility * 3 + actor.stats.dexterity;
+        actor.attack.critical = 5 + actor.stats.agility * 2 + actor.stats.dexterity;
         actor.attack.delay = 1000 - actor.stats.agility * 10;
     });
 };
@@ -476,8 +470,47 @@ const obstacles = function () {
     });
 };
 
-const spawnZones = function () {
+const spawnDice = function (spawnZone) {
+    return Math.random() < spawnZone.probability;
+};
 
+const deepCloneSpawnPrototype = function (prototype) {
+    return JSON.parse(JSON.stringify(prototype));
+};
+
+const spawnZones = function () {
+    var i, j, x, y;
+
+    each("spawnZone", function (zone) {
+        var thingsInZone = 0;
+        var spawnZone = zone.spawnZone;
+
+        for (i = 0; i < spawnZone.width; i++) {
+            for (j = 0; j < spawnZone.width; j++) {
+                x = i + spawnZone.x;
+                y = j + spawnZone.y;
+
+                if (getByPosition(x, y)) {
+                    thingsInZone++;
+                }
+            }
+        }
+
+        for (i = 0; i < spawnZone.width; i++) {
+            for (j = 0; j < spawnZone.width; j++) {
+                x = i + spawnZone.x;
+                y = j + spawnZone.y;
+
+                if (!getByPosition(x, y) && thingsInZone < spawnZone.max) {
+                    if (spawnDice(spawnZone)) {
+                        var prototype = deepCloneSpawnPrototype(spawnZone.prototype)
+                        addEntity(Object.assign({}, prototype, {position: {x: x, y: y}}));
+                        thingsInZone++;
+                    }
+                }
+            }
+        }
+    });
 };
 
 clearLogs();
@@ -487,7 +520,7 @@ const goblinPrototype = function() {
     return {
         enemy: {},
         name: "Goblin",
-            position: {},
+        position: {},
         sprite: {text: "g"},
         stats: {strength: 1, agility: 1, vitality: 1, dexterity: 1, freePoints: 0},
         health: {points: 50, total: 50},
@@ -506,18 +539,23 @@ const goblinPrototype = function() {
     };
 };
 
-function createGoblin(position) {
-    addEntity(Object.assign({}, goblinPrototype(), {position: position}));
-}
+//noinspection JSUnusedGlobalSymbols
+const corpseDummyPrototype = {
+    corpse: {decayIn: 0},
+};
 
-function createStoneWall(position) {
+const createGoblin = function (position) {
+    addEntity(Object.assign({}, goblinPrototype(), {position: position}));
+};
+
+const createStoneWall = function (position) {
     addEntity({
         obstacle: {},
         name: "Stone Wall",
         position: position,
         sprite: {text: "#"},
     });
-}
+};
 
 const newGame = function () {
     console.log("There is no saved game. Creating new one");
@@ -624,13 +662,14 @@ const newGame = function () {
 
     addEntity({
         spawnZone: {
+            x: 5,
+            y: 8,
             width: 7,
             height: 7,
             prototype: goblinPrototype(),
             probability: 0.0001,
             max: 10,
         },
-        position: {x: 5, y: 8},
     });
 };
 

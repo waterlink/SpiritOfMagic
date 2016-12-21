@@ -330,6 +330,11 @@ const rollDamageDice = function (attack) {
     return Math.floor(roll * attack.damage) + attack.bonus;
 };
 
+const rollCritMultiplierDice = function (attack) {
+    var roll = Math.random() * 100;
+    return roll < attack.critical ? 2 : 1;
+};
+
 const reducedByDefense = function (damage, defense) {
     return Math.max(0, damage - defense.reduction);
 };
@@ -342,9 +347,13 @@ const autoAttack = function () {
                 actor.attack.delayLeft = actor.attack.delay;
 
                 if (rollHitDice(actor.attack, target.defense)) {
-                    var damage = reducedByDefense(rollDamageDice(actor.attack), target.defense);
+                    var critMultiplier = rollCritMultiplierDice(actor.attack);
+                    var rawDamage = critMultiplier * rollDamageDice(actor.attack);
+                    var damage = reducedByDefense(rawDamage, target.defense);
 
-                    addLog(actor.name + " inflicts " + damage + " points of damage to " + target.name);
+                    var critRemark = critMultiplier > 1 ? " (crit x" + critMultiplier + ")" : "";
+
+                    addLog(actor.name + " inflicts " + damage + " points of damage to " + target.name + critRemark);
                     affectHealth(target.health, -damage);
 
                     target.battle.lastDamageInflicter = actor.index;
@@ -490,8 +499,10 @@ const rewards = function () {
     each("rewards", function (actor) {
         if (actor.death.dead && !actor.rewards.rewarded) {
             var lastDamageInflicter = entities[actor.battle.lastDamageInflicter];
-            if (lastDamageInflicter.experience)
+            if (lastDamageInflicter.experience) {
                 lastDamageInflicter.experience.points += actor.rewards.experience;
+                addLog(lastDamageInflicter.name + " gained " + actor.rewards.experience + " XP");
+            }
             actor.rewards.rewarded = true;
         }
     });
@@ -625,7 +636,7 @@ const goblinPrototype = function() {
         wearing: {
             shield: null,
         },
-        rewards: {experience: 100, rewarded: false},
+        rewards: {experience: 75, rewarded: false},
         loot: {
             items: [
                 {
@@ -675,7 +686,7 @@ const goblinShamanPrototype = function() {
                 name: "Arm Shield",
             }),
         },
-        rewards: {experience: 2000, rewarded: false},
+        rewards: {experience: 150, rewarded: false},
         loot: {
             items: [
                 {
@@ -689,6 +700,35 @@ const goblinShamanPrototype = function() {
             ],
             dropped: false,
         },
+    };
+};
+
+const ghoulPrototype = function () {
+    return {
+        enemy: {},
+        name: "Ghoul",
+        position: {},
+        sprite: {text: "{G}"},
+        stats: {strength: 10, agility: 10, vitality: 20, dexterity: 10, freePoints: 0},
+        health: {points: 300, total: 300},
+        healthRegen: {delay: 5000, delayLeft: 500},
+        attack: {damage: 5, dice: 3, bonus: 2, accuracy: 90, critical: 5, delay: 1000, delayLeft: 0},
+        defense: {reduction: 5, evasion: 10},
+        battle: {inBattle: false},
+        death: {dead: false},
+        wielding: {
+            weapon: addEntity({
+                weapon: {damage: 5, dice: 3, bonus: 5},
+                name: "Ghoul's Claw",
+            }),
+        },
+        wearing: {
+            shield: addEntity({
+                shield: {reduction: 1, evasion: 2},
+                name: "Broken Arm Shield",
+            }),
+        },
+        rewards: {experience: 2500, rewarded: false},
     };
 };
 
@@ -770,33 +810,6 @@ const newGame = function () {
     createGoblin({x: 8, y: 12});
     createGoblin({x: 10, y: 14});
 
-    addEntity({
-        enemy: {},
-        name: "Ghoul",
-        position: {x: 23, y: 15},
-        sprite: {text: "G"},
-        stats: {strength: 10, agility: 5, vitality: 20, dexterity: 5, freePoints: 0},
-        health: {points: 300, total: 300},
-        healthRegen: {delay: 5000, delayLeft: 500},
-        attack: {damage: 5, dice: 3, bonus: 2, accuracy: 90, critical: 5, delay: 1000, delayLeft: 0},
-        defense: {reduction: 5, evasion: 10},
-        battle: {inBattle: false},
-        death: {dead: false},
-        wielding: {
-            weapon: addEntity({
-                weapon: {damage: 5, dice: 3, bonus: 5},
-                name: "Ghoul's Claw",
-            }),
-        },
-        wearing: {
-            shield: addEntity({
-                shield: {reduction: 1, evasion: 2},
-                name: "Broken Arm Shield",
-            }),
-        },
-        rewards: {experience: 5000, rewarded: false},
-    });
-
     designRoom(4, 7, createStoneWall, [
         "####.####",
         "#.......#",
@@ -852,6 +865,18 @@ const newGame = function () {
             prototype: goblinShamanPrototype(),
             probability: 0.0001,
             max: 25,
+        },
+    });
+
+    addEntity({
+        spawnZone: {
+            x: 22,
+            y: 12,
+            width: 3,
+            height: 3,
+            prototype: ghoulPrototype(),
+            probability: 0.0007,
+            max: 1,
         },
     });
 };

@@ -8,9 +8,16 @@ const get = function (name) {
 
 const addComponent = function (name, component) {
     get(name).push(component);
+    component.componentIndex = get(name).length - 1;
 };
 
 var entities = [];
+
+function addComponentToEntity(entity, name, component) {
+    entity[name] = component;
+    component.entityIndex = entity.index;
+    addComponent(name, component);
+}
 
 const addEntity = function (entity) {
     entities.push(entity);
@@ -19,17 +26,32 @@ const addEntity = function (entity) {
     for (var name in entity) {
         if (entity.hasOwnProperty(name)) {
             var component = entity[name];
-            component.entityIndex = entity.index;
-            addComponent(name, component);
+            addComponentToEntity(entity, name, component);
         }
     }
 
     return entity.index;
 };
 
+const removeEntity = function (entity) {
+    for (var name in entity) {
+        if (entity.hasOwnProperty(name)) {
+            var component = entity[name];
+            var componentList = get(name);
+            componentList[component.componentIndex] = null;
+        }
+    }
+
+    entities[entity.index] = null;
+};
+
 const each = function (name, action) {
     get(name).forEach(function (component) {
-        action(entities[component.entityIndex]);
+        if (component) {
+            var entity = entities[component.entityIndex];
+            if (entity)
+                action(entity);
+        }
     });
 };
 
@@ -225,6 +247,10 @@ const battleStatus = function () {
                 enemy.battle.inBattle = false;
             }
         });
+
+        if (!player.battle.inBattle) {
+            player.battle.target = null;
+        }
     });
 };
 
@@ -303,16 +329,27 @@ const death = function () {
     each("health", function (actor) {
         if (actor.health.points <= 0 && !actor.death.dead) {
             actor.death.dead = true;
-            actor.sprite.text = null;
+            actor.sprite.text = "~";
 
-            addEntity({
-                corpse: {},
-                position: {x: actor.position.x, y: actor.position.y},
-                sprite: {text: "~"},
-            });
+            addComponentToEntity(actor, "corpse", {decayIn: 10000});
+
+            // addEntity({
+            //     corpse: {decayIn: 10000},
+            //     position: {x: actor.position.x, y: actor.position.y},
+            //     sprite: {text: "~"},
+            // });
 
             var lastDamageInflicter = entities[actor.battle.lastDamageInflicter];
             addLog(actor.name + " is killed by " + lastDamageInflicter.name);
+        }
+    });
+};
+
+const corpseDecay = function () {
+    each("corpse", function (corpse) {
+        corpse.corpse.decayIn -= timePassedMs;
+        if (corpse.corpse.decayIn <= 0) {
+            removeEntity(corpse);
         }
     });
 };
@@ -340,16 +377,29 @@ const addLog = function (message) {
     });
 };
 
-const calculateStats = function () {
+const coreStats = function () {
     each("stats", function (actor) {
         actor.health.total = 10 + actor.stats.vitality * 10;
         actor.healthRegen.delay = 10000 - actor.stats.vitality * 30;
         actor.defense.reduction = actor.stats.vitality;
-        actor.defense.evasion = actor.stats.agility + actor.stats.dexterity * 2;
+        actor.defense.evasion = 5 + actor.stats.agility + actor.stats.dexterity;
         actor.attack.bonus = 1 + actor.stats.strength;
-        actor.attack.accuracy = 20 + actor.stats.agility + actor.stats.dexterity * 3;
-        actor.attack.critical = actor.stats.agility * 3 + actor.stats.dexterity;
+        actor.attack.accuracy = 40 + actor.stats.agility + actor.stats.dexterity * 3;
+        actor.attack.critical = 5 + actor.stats.agility * 3 + actor.stats.dexterity;
         actor.attack.delay = 1000 - actor.stats.agility * 10;
+    });
+};
+
+const levelStats = function () {
+    each("experience", function (actor) {
+        actor.health.total += 2 * actor.experience.level;
+        actor.healthRegen.delay -= 10 * actor.experience.level;
+        actor.defense.reduction += Math.floor(actor.experience.level / 2);
+        actor.defense.evasion += actor.experience.level;
+        actor.attack.bonus += Math.floor(actor.experience.level / 2);
+        actor.attack.accuracy += actor.experience.level;
+        actor.attack.critical += actor.experience.level;
+        actor.attack.delay -= 3 * actor.experience.level;
     });
 };
 
@@ -362,7 +412,7 @@ const increaseStat = function (stat) {
     });
 };
 
-const calculateWeaponStats = function () {
+const weaponStats = function () {
     each("wielding", function (actor) {
         var weapon = entities[actor.wielding.weapon];
         actor.attack.damage = weapon.weapon.damage;
@@ -394,14 +444,50 @@ const leveling = function () {
     });
 };
 
+var byPosition = {};
+
+const optimizeByPosition = function () {
+    byPosition = {};
+
+    each("position", function (actor) {
+        if (!byPosition[actor.position.x])
+            byPosition[actor.position.x] = {};
+        byPosition[actor.position.x][actor.position.y] = actor;
+    });
+};
+
+const getByPosition = function (x, y) {
+    if (!byPosition[x]) return null;
+    return byPosition[x][y];
+};
+
+const obstacles = function () {
+    each("willMove", function (actor) {
+        if (actor.willMove.dx != 0 || actor.willMove.dy != 0) {
+            var nx = actor.position.x + actor.willMove.dx;
+            var ny = actor.position.y + actor.willMove.dy;
+
+            var possibleObstacle = getByPosition(nx, ny);
+            if (possibleObstacle && possibleObstacle.obstacle) {
+                actor.willMove.dx = 0;
+                actor.willMove.dy = 0;
+            }
+        }
+    });
+};
+
+const spawnZones = function () {
+
+};
+
 clearLogs();
 initField();
 
-function createGoblin(position) {
-    addEntity({
+const goblinPrototype = function() {
+    return {
         enemy: {},
         name: "Goblin",
-        position: position,
+            position: {},
         sprite: {text: "g"},
         stats: {strength: 1, agility: 1, vitality: 1, dexterity: 1, freePoints: 0},
         health: {points: 50, total: 50},
@@ -417,6 +503,19 @@ function createGoblin(position) {
             }),
         },
         rewards: {experience: 100, rewarded: false},
+    };
+};
+
+function createGoblin(position) {
+    addEntity(Object.assign({}, goblinPrototype(), {position: position}));
+}
+
+function createStoneWall(position) {
+    addEntity({
+        obstacle: {},
+        name: "Stone Wall",
+        position: position,
+        sprite: {text: "#"},
     });
 }
 
@@ -486,6 +585,53 @@ const newGame = function () {
         },
         rewards: {experience: 5000, rewarded: false},
     });
+
+    createStoneWall({x: 4, y: 7});
+    createStoneWall({x: 5, y: 7});
+    createStoneWall({x: 6, y: 7});
+    createStoneWall({x: 7, y: 7});
+
+    createStoneWall({x: 9, y: 7});
+    createStoneWall({x: 10, y: 7});
+    createStoneWall({x: 11, y: 7});
+    createStoneWall({x: 12, y: 7});
+
+    createStoneWall({x: 4, y: 8});
+    createStoneWall({x: 4, y: 9});
+    createStoneWall({x: 4, y: 10});
+    createStoneWall({x: 4, y: 11});
+    createStoneWall({x: 4, y: 12});
+    createStoneWall({x: 4, y: 13});
+    createStoneWall({x: 4, y: 14});
+    createStoneWall({x: 4, y: 15});
+
+    createStoneWall({x: 12, y: 8});
+    createStoneWall({x: 12, y: 9});
+    createStoneWall({x: 12, y: 10});
+    createStoneWall({x: 12, y: 11});
+    createStoneWall({x: 12, y: 12});
+    createStoneWall({x: 12, y: 13});
+    createStoneWall({x: 12, y: 14});
+    createStoneWall({x: 12, y: 15});
+
+    createStoneWall({x: 5, y: 15});
+    createStoneWall({x: 6, y: 15});
+    createStoneWall({x: 7, y: 15});
+    createStoneWall({x: 8, y: 15});
+    createStoneWall({x: 9, y: 15});
+    createStoneWall({x: 10, y: 15});
+    createStoneWall({x: 11, y: 15});
+
+    addEntity({
+        spawnZone: {
+            width: 7,
+            height: 7,
+            prototype: goblinPrototype(),
+            probability: 0.0001,
+            max: 10,
+        },
+        position: {x: 5, y: 8},
+    });
 };
 
 const DELETE_KEY = 46;
@@ -528,16 +674,22 @@ setInterval(function () {
     renderBattleTargetStats();
     renderLogs();
 
-    calculateStats();
-    calculateWeaponStats();
+    optimizeByPosition();
+
+    coreStats();
+    levelStats();
+    weaponStats();
+    obstacles();
     movement();
     regenHealth();
     battleStatus();
     attackDelay();
     autoAttack();
     death();
+    corpseDecay();
     rewards();
     leveling();
+    spawnZones();
 
     saveToLocalStorage();
 

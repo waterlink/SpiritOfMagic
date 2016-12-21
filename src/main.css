@@ -50,6 +50,10 @@
     margin-left: 4em;
 }
 
+#stats dl dt a {
+    text-decoration: none;
+}
+
 .hide {
     display: none;
 }

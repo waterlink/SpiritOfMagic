@@ -195,6 +195,29 @@ const toggleStats = function () {
     stats.classList.toggle("hide");
 };
 
+const equipment = document.getElementById("equipment");
+
+const equipmentKeyUp = function (key) {
+    if (key === "E".charCodeAt(0)) {
+        toggleEquipment();
+    }
+};
+
+const toggleEquipment = function () {
+    equipment.classList.toggle("hide");
+};
+
+const nameOf = function (entity) {
+    return entity && entity.name ? entity.name : "---";
+};
+
+const renderEquipment = function () {
+    each("player", function (player) {
+        subElement(equipment, "wield").textContent = nameOf(entities[player.wielding.weapon]);
+        subElement(equipment, "shield").textContent = nameOf(entities[player.wearing.shield]);
+    });
+};
+
 const statusBar = document.getElementById("status_bar");
 const healthBarSize = 10;
 
@@ -832,6 +855,7 @@ setInterval(function () {
 
     renderSprites();
     renderStats();
+    renderEquipment();
     renderStatusBar();
     renderPlayerSprite();
     renderBattleIndicator();
@@ -867,6 +891,7 @@ document.body.onkeyup = function (event) {
     [
         movementKeyUp,
         statsKeyUp,
+        equipmentKeyUp,
         newGameKeyUp,
         wieldKeyUp,
         wearKeyUp,

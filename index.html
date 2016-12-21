@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Spirit Of Magic</title>
+
+    <link rel="stylesheet" href="src/main.css">
+</head>
+<body>
+
+<div id="status_bar">
+    <strong>HP: </strong>
+    <span class="status_bar__health_indicator"></span>
+
+    <span class="status_bar__target hide">
+        |
+        <strong>Target: </strong>
+        <span class="status_bar__target__name"></span>
+        <span class="status_bar__target__health"></span>
+    </span>
+</div>
+
+<div id="field"></div>
+
+<div id="stats" class="hide">
+    <strong>Stats</strong>
+
+    <dl>
+        <dt>HP</dt><dd class="stats__hp"></dd>
+        <dt>DMG</dt><dd class="stats__dmg"></dd>
+        <dt>HIT</dt><dd class="stats__hit"></dd>
+        <dt>CRIT</dt><dd class="stats__crit"></dd>
+        <dt>ASPD</dt><dd class="stats__aspd"></dd>
+        <dt>DEF</dt><dd class="stats__def"></dd>
+        <dt>EVA</dt><dd class="stats__eva"></dd>
+    </dl>
+</div>
+
+<div id="log">
+    <p class="log__0"></p>
+    <p class="log__1"></p>
+    <p class="log__2"></p>
+    <p class="log__3"></p>
+    <p class="log__4"></p>
+</div>
+
+<script src="src/main.js"></script>
+
+</body>
+</html>

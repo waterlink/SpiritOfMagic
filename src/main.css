@@ -1,0 +1,47 @@
+#field {
+    border-left: darkslategray solid 1px;
+    border-top: darkslategray solid 1px;
+    display: table;
+}
+
+.field__row {
+    margin: 0;
+    padding: 0;
+    display: block;
+    word-spacing: -1px;
+}
+
+.field__cell {
+    border-right: darkslategray solid 1px;
+    border-bottom: darkslategray solid 1px;
+    display: table-cell;
+    width: 29px;
+    height: 30px;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+    vertical-align: middle;
+}
+
+#stats {
+    position: absolute;
+    left: 120px;
+    top: 90px;
+    width: 300px;
+    height: 200px;
+    background-color: white;
+    border: darkslategray solid 1px;
+    padding: 1em;
+}
+
+#stats dl dt {
+    float: left;
+}
+
+#stats dl dd {
+    margin-left: 5em;
+}
+
+.hide {
+    display: none;
+}

@@ -638,8 +638,21 @@ const renderDialog = function () {
                 dialog.options.forEach(function (option, index) {
                     subElement(dialogElement, "option_" + index).textContent = option.text;
                 });
+
+                addComponentToEntity(entity, "activeDialog", {});
+                dialog.activated = true;
             }
         });
+    });
+};
+
+const dialogOption = function (index) {
+    each("activeDialog", function (entity) {
+        var option = entity.dialog.options[index];
+        if (option && option.close) {
+            removeComponentFromEntity(entity, "activeDialog");
+            dialogElement.classList.add("hide");
+        }
     });
 };
 
@@ -816,9 +829,24 @@ const newGame = function () {
             x: 10,
             y: 5,
             title: "Tutorial Sign 1",
-            text: "To move, use arrows",
+            text: "Welcome to Spirit of Magic game. To move around, use arrow keys. Try to get out of this dungeon!",
             options: [
-                {text: "Continue"},
+                {text: "Continue", close: true},
+            ],
+        },
+    });
+
+    addEntity({
+        dialog: {
+            auto: true,
+            activated: false,
+            x: 8,
+            y: 7,
+            title: "Tutorial Sign 2",
+            text: "You see Goblin in front of you. To engage in a fight with an enemy move on the same spot as they are." +
+            "Also, don't forget to check out your stats (press S to open stats window) - you have unallocated stat points.",
+            options: [
+                {text: "Continue", close: true},
             ],
         },
     });
@@ -866,6 +894,8 @@ const newGame = function () {
         "#.......#",
         "####.####",
     ]);
+
+    createGoblin({x: 8, y: 8});
 
     addEntity({
         spawnZone: {

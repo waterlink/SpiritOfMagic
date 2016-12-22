@@ -611,6 +611,38 @@ const resetStats = function () {
     });
 };
 
+const dialogElement = document.getElementById("dialog");
+
+const clearDialogOptions = function () {
+    for (var i = 0; i < 5; i++) {
+        subElement(dialogElement, "option_" + i).textContent = "";
+    }
+};
+
+const renderDialog = function () {
+    each("player", function (player) {
+        var position = player.position;
+
+        each("dialog", function (entity) {
+            var dialog = entity.dialog;
+            if (dialog.x === position.x &&
+                dialog.y === position.y &&
+                dialog.auto && !dialog.activated) {
+
+                dialogElement.classList.remove("hide");
+                subElement(dialogElement, "title").textContent = dialog.title;
+                subElement(dialogElement, "text").textContent = dialog.text;
+
+                clearDialogOptions();
+
+                dialog.options.forEach(function (option, index) {
+                    subElement(dialogElement, "option_" + index).textContent = option.text;
+                });
+            }
+        });
+    });
+};
+
 clearLogs();
 initField();
 
@@ -774,6 +806,24 @@ const newGame = function () {
     });
 
     addEntity({
+        startPosition: {x: 10, y: 5},
+    });
+
+    addEntity({
+        dialog: {
+            auto: true,
+            activated: false,
+            x: 10,
+            y: 5,
+            title: "Tutorial Sign 1",
+            text: "To move, use arrows",
+            options: [
+                {text: "Continue"},
+            ],
+        },
+    });
+
+    addEntity({
         player: {},
         name: "Player",
         position: {x: 10, y: 5},
@@ -799,16 +849,11 @@ const newGame = function () {
         experience: {level: 1, points: 0, total: 100, growth: 1.1, gainedStatPoints: 1},
     });
 
-    createGoblin({x: 5, y: 10});
-    createGoblin({x: 7, y: 9});
-    createGoblin({x: 9, y: 8});
-    createGoblin({x: 11, y: 10});
-    createGoblin({x: 5, y: 11});
-    createGoblin({x: 8, y: 11});
-    createGoblin({x: 11, y: 11});
-    createGoblin({x: 6, y: 13});
-    createGoblin({x: 8, y: 12});
-    createGoblin({x: 10, y: 14});
+    designRoom(7, 4, createStoneWall, [
+        "#####",
+        "#...#",
+        "#...#",
+    ]);
 
     designRoom(4, 7, createStoneWall, [
         "####.####",
@@ -945,6 +990,7 @@ setInterval(function () {
     renderStats();
     renderEquipment();
     renderStatusBar();
+    renderDialog();
     renderPlayerSprite();
     renderBattleIndicator();
     renderBattleTargetStats();

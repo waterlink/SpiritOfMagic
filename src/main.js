@@ -33,15 +33,17 @@ const addEntity = function (entity) {
     return entity.index;
 };
 
-function removeComponentFromEntity(entity, name) {
+// TODO: add pool of free components for reuse
+const removeComponentFromEntity = function(entity, name) {
     if (entity.hasOwnProperty(name)) {
         var component = entity[name];
         var componentList = get(name);
         componentList[component.componentIndex] = null;
         delete entity[name];
     }
-}
+};
 
+// TODO: add pool of free entities for reuse
 const removeEntity = function (entity) {
     var index = entity.index;
 
@@ -369,12 +371,35 @@ const death = function () {
     each("health", function (actor) {
         if (actor.health.points <= 0 && !actor.death.dead) {
             actor.death.dead = true;
+            actor.sprite.originalText = actor.sprite.text;
             actor.sprite.text = "~";
 
-            addComponentToEntity(actor, "corpse", {decayIn: 10000});
+            if (actor.death.canDecay) {
+                addComponentToEntity(actor, "corpse", {decayIn: 10000});
+            }
 
             var lastDamageInflicter = entities[actor.battle.lastDamageInflicter];
             addLog(actor.name + " is killed by " + lastDamageInflicter.name);
+        }
+    });
+};
+
+const revival = function () {
+    each("revives", function (actor) {
+        if (actor.death.dead) {
+            actor.revives.revivesIn -= timePassedMs;
+            if (actor.revives.revivesIn <= 0) {
+                actor.health.points = actor.health.total;
+                actor.death.dead = false;
+                actor.sprite.text = actor.sprite.originalText;
+                actor.revives.revivesIn = actor.revives.reviveDelay;
+
+                each("startPosition", function (start) {
+                    var position = start.startPosition;
+                    actor.position.x = position.x;
+                    actor.position.y = position.y;
+                });
+            }
         }
     });
 };
@@ -620,6 +645,25 @@ const clearDialogOptions = function () {
 };
 
 const renderDialog = function () {
+    dialogElement.classList.add("hide");
+
+    each("dialog", function (entity) {
+        var dialog = entity.dialog;
+        if (dialog.active) {
+            dialogElement.classList.remove("hide");
+            subElement(dialogElement, "title").textContent = dialog.title;
+            subElement(dialogElement, "text").textContent = dialog.text;
+
+            clearDialogOptions();
+
+            dialog.options.forEach(function (option, index) {
+                subElement(dialogElement, "option_" + index).textContent = option.text;
+            });
+        }
+    });
+};
+
+const positionalDialogTriggers = function () {
     each("player", function (player) {
         var position = player.position;
 
@@ -629,18 +673,7 @@ const renderDialog = function () {
                 dialog.y === position.y &&
                 dialog.auto && !dialog.activated) {
 
-                dialogElement.classList.remove("hide");
-                subElement(dialogElement, "title").textContent = dialog.title;
-                subElement(dialogElement, "text").textContent = dialog.text;
-
-                clearDialogOptions();
-
-                dialog.options.forEach(function (option, index) {
-                    subElement(dialogElement, "option_" + index).textContent = option.text;
-                });
-
-                addComponentToEntity(entity, "activeDialog", {});
-                dialog.activated = true;
+                addComponentToEntity(entity, "activateDialog", {});
             }
         });
     });
@@ -649,10 +682,79 @@ const renderDialog = function () {
 const dialogOption = function (index) {
     each("activeDialog", function (entity) {
         var option = entity.dialog.options[index];
-        if (option && option.close) {
+        if (!option) return;
+
+        if (option.close || option.nextDialog) {
             removeComponentFromEntity(entity, "activeDialog");
-            dialogElement.classList.add("hide");
+            entity.dialog.active = false;
         }
+
+        if (option.nextDialog) {
+            console.log("activating dialog with title: ", option.nextDialog);
+            activateDialogWithTitle(option.nextDialog);
+        }
+    });
+};
+
+const activateDialogWithTitle = function (dialogTitle) {
+    each("dialog", function (dialog) {
+        if (dialog.dialog.title === dialogTitle) {
+            addComponentToEntity(dialog, "activateDialog", {});
+        }
+    });
+};
+
+const dialogTriggers = function () {
+    each("dialogTrigger", function (entity) {
+        var dialogTrigger = entity.dialogTrigger;
+
+        if (dialogTrigger.when === "immediately") {
+            activateDialogWithTitle(dialogTrigger.dialogTitle);
+        }
+    });
+};
+
+const levelDialogTriggers = function () {
+    each("levelDialogTrigger", function (entity) {
+        var dialogTrigger = entity.levelDialogTrigger;
+
+        each("player", function (player) {
+            if (player.experience.level === dialogTrigger.atLevel) {
+                activateDialogWithTitle(dialogTrigger.dialogTitle);
+            }
+        });
+    });
+};
+
+const deathDialogTriggers = function () {
+    each("deathDialogTrigger", function (actor) {
+        if (actor.death.dead) {
+            activateDialogWithTitle(actor.deathDialogTrigger.dialogTitle);
+        }
+    });
+};
+
+const activateDialogs = function () {
+    each("activateDialog", function (entity) {
+        var dialog = entity.dialog;
+        removeComponentFromEntity(entity, "activateDialog");
+
+        if (dialog.once && dialog.activated) return;
+        if (dialog.active) return;
+
+        dialog.active = true;
+        dialog.activated = true;
+        addComponentToEntity(entity, "activeDialog", {});
+    });
+};
+
+const deactivateDialogs = function () {
+    each("deactivateDialog", function (entity) {
+        var dialog = entity.dialog;
+        removeComponentFromEntity(entity, "deactivateDialog");
+
+        dialog.active = false;
+        removeComponentFromEntity(entity, "activeDialog");
     });
 };
 
@@ -671,7 +773,7 @@ const goblinPrototype = function() {
         attack: {damage: 2, dice: 4, bonus: 0, accuracy: 90, critical: 5, delay: 3000, delayLeft: 0},
         defense: {reduction: 0, evasion: 10},
         battle: {inBattle: false},
-        death: {dead: false},
+        death: {dead: false, canDecay: true},
         wielding: {
             weapon: addEntity({
                 weapon: {damage: 1, dice: 2, bonus: 0},
@@ -690,6 +792,10 @@ const goblinPrototype = function() {
                         weapon: {damage: 2, dice: 4, bonus: 2},
                         name: "Stolen Short Sword 2d4 + 2",
                         sprite: {text: "|"},
+                        dialogTrigger: {
+                            when: "immediately",
+                            dialogTitle: "Tutorial Sign: Wielding a weapon",
+                        },
                     },
                 },
                 {
@@ -698,6 +804,10 @@ const goblinPrototype = function() {
                         shield: {reduction: 5, evasion: 3},
                         name: "Small Shield",
                         sprite: {text: "()"},
+                        dialogTrigger: {
+                            when: "immediately",
+                            dialogTitle: "Tutorial Sign: Wearing an item",
+                        },
                     },
                 }
             ],
@@ -718,7 +828,7 @@ const goblinShamanPrototype = function() {
         attack: {damage: 2, dice: 4, bonus: 0, accuracy: 90, critical: 5, delay: 3000, delayLeft: 0},
         defense: {reduction: 0, evasion: 10},
         battle: {inBattle: false},
-        death: {dead: false},
+        death: {dead: false, canDecay: true},
         wielding: {
             weapon: addEntity({
                 weapon: {damage: 3, dice: 4, bonus: 0},
@@ -740,6 +850,10 @@ const goblinShamanPrototype = function() {
                         shield: {reduction: 7, evasion: 7},
                         name: "Arm Spike Shield + 4",
                         sprite: {text: "<("},
+                        dialogTrigger: {
+                            when: "immediately",
+                            dialogTitle: "Tutorial Sign: Wearing an item",
+                        },
                     },
                 }
             ],
@@ -760,7 +874,7 @@ const ghoulPrototype = function () {
         attack: {damage: 5, dice: 3, bonus: 2, accuracy: 90, critical: 5, delay: 1000, delayLeft: 0},
         defense: {reduction: 5, evasion: 10},
         battle: {inBattle: false},
-        death: {dead: false},
+        death: {dead: false, canDecay: true},
         wielding: {
             weapon: addEntity({
                 weapon: {damage: 5, dice: 3, bonus: 5},
@@ -829,9 +943,9 @@ const newGame = function () {
             x: 10,
             y: 5,
             title: "Tutorial Sign 1",
-            text: "Welcome to Spirit of Magic game. To move around, use arrow keys. Try to get out of this dungeon!",
+            text: "Welcome to Spirit of Magic game. To move around, [use arrow keys]. Try to get out of this dungeon!",
             options: [
-                {text: "Continue", close: true},
+                {text: "OK. I will move around using [arrow keys]!", close: true},
             ],
         },
     });
@@ -844,9 +958,89 @@ const newGame = function () {
             y: 7,
             title: "Tutorial Sign 2",
             text: "You see Goblin in front of you. To engage in a fight with an enemy move on the same spot as they are." +
-            "Also, don't forget to check out your stats (press S to open stats window) - you have unallocated stat points.",
+            "Also, don't forget to check out your stats ([press S] to open stats window) - you have unallocated stat points.",
             options: [
-                {text: "Continue", close: true},
+                {text: "Tell me more about stats", close: false, nextDialog: "Tutorial Sign 2: Stats"},
+                {text: "Got it! Let's go! [step on Goblin's spot]", close: true},
+            ],
+        },
+    });
+
+    addEntity({
+        dialog: {
+            auto: false,
+            activated: false,
+            once: false,
+            title: "Tutorial Sign 2: Stats",
+            text: "There are 4 core stats, that you can allocate free points to: " +
+            "[STR] strength - increases your [DMG+] physical damage; " +
+            "[AGI] agility - increases your [EVA++] evasion, [ACC+] accuracy, [CRIT++] critical chance, " +
+            "and increases your [ASPD+] attack speed (decreases delay between attacks); " +
+            "[VIT] vitality - increases your [HP+] total health points, [HREG+] health regeneration rate, " +
+            "and [DEF+] damage reduction; " +
+            "[DEX] dexterity - increases your [EVA+] evasion, [ACC+++] accuracy, and [CRIT+] critical chance.",
+            options: [
+                {text: "Awesome! I'm going to allocate my free stats now [press S to open stats window]", close: true},
+            ],
+        },
+    });
+
+    addEntity({
+        levelDialogTrigger: {atLevel: 2, dialogTitle: "Tutorial Sign: Leveling up"},
+    });
+
+    addEntity({
+        dialog: {
+            auto: false,
+            activated: false,
+            once: true,
+            title: "Tutorial Sign: Leveling up",
+            text: "You have just leveled up. Congratulations! And don't forget to allocate your new free stat points" +
+            " [press S to access your stats].",
+            options: [
+                {text: "Fantastic! I will allocate my free points right away. [press S]", close: true},
+            ],
+        },
+    });
+
+    addEntity({
+        dialog: {
+            auto: false,
+            activated: false,
+            once: true,
+            title: "Tutorial Sign: Wielding a weapon",
+            text: "Look! There is a loot on the floor. This looks like a weapon. Quickly, wield it - it looks stronger " +
+            "than that dagger you have! To wield a weapon stand on the same spot with it and [press W]. To see your equipment " +
+            "[press E] to open",
+            options: [
+                {text: "Great! I wonder how great this weapon is. [press W to wield]", close: true},
+            ],
+        },
+    });
+
+    addEntity({
+        dialog: {
+            auto: false,
+            activated: false,
+            once: true,
+            title: "Tutorial Sign: Wearing an item",
+            text: "Look! There is a loot on the floor. This looks like a shield. Quickly, wear it - you don't have any!" +
+            "To wear an item stand on the same spot with it and press W.",
+            options: [
+                {text: "Awesome! I needed that shield. [press W to wear]", close: true},
+            ],
+        },
+    });
+
+    addEntity({
+        dialog: {
+            auto: false,
+            activated: false,
+            once: false,
+            title: "You have died",
+            text: "Don't worry! You will be revived in 10 seconds.",
+            options: [
+                {text: "OK", close: true},
             ],
         },
     });
@@ -863,7 +1057,9 @@ const newGame = function () {
         attack: {damage: 3, dice: 4, bonus: 0, accuracy: 70, critical: 5, delay: 1000, delayLeft: 0},
         defense: {reduction: 5, evasion: 20},
         battle: {inBattle: false},
-        death: {dead: false},
+        death: {dead: false, canDecay: false},
+        deathDialogTrigger: {dialogTitle: "You have died"},
+        revives: {reviveDelay: 10000, revivesIn: 10000},
         wielding: {
             weapon: addEntity({
                 weapon: {damage: 1, dice: 2, bonus: 0},
@@ -1039,12 +1235,19 @@ setInterval(function () {
     attackDelay();
     autoAttack();
     death();
+    revival();
     dropLoot();
     corpseDecay();
     droppedLootDecay();
     rewards();
     leveling();
     spawnZones();
+    positionalDialogTriggers();
+    dialogTriggers();
+    levelDialogTriggers();
+    deathDialogTriggers();
+    activateDialogs();
+    deactivateDialogs();
 
     saveToLocalStorage();
 

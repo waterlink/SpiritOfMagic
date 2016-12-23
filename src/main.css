@@ -78,10 +78,15 @@
     left: 120px;
     top: 90px;
     width: 300px;
-    height: 200px;
+    height: 25em;
     background-color: white;
     border: darkslategray solid 1px;
     padding: 1em;
+}
+
+#dialog .dialog__text {
+    height: 15em;
+    overflow-y: auto;
 }
 
 .hide {
